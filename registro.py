@@ -4,10 +4,10 @@ darse de alta/baja en las alertas, y guarda su filtro en Supabase.
 
 Comandos que entiende:
   /start                          -> explica los comandos
-  /alta                           -> recibir TODOS los anuncios nuevos
-  /alta zona=Russafa              -> solo cuando el anuncio menciona esa zona
-  /alta zona=Ciutat Vella precio_max=900
-  /alta precio_min=500 precio_max=1000
+  /alta                           -> Valencia, todos los anuncios nuevos
+  /alta ciudad=Madrid             -> todos los anuncios nuevos de Madrid
+  /alta ciudad=Madrid zona=Chamberí precio_max=900
+  /alta zona=Russafa              -> Valencia (por defecto) + esa zona
   /baja                           -> dejar de recibir avisos
   /estado                         -> recordatorio de los comandos
 
@@ -33,10 +33,10 @@ HEADERS_SB = {
 
 AYUDA = (
     "Comandos disponibles:\n"
-    "/alta — recibir todos los avisos\n"
-    "/alta zona=Russafa — solo esa zona\n"
-    "/alta zona=Ciutat Vella precio_max=900\n"
-    "/alta precio_min=500 precio_max=1000\n"
+    "/alta — Valencia, todos los avisos\n"
+    "/alta ciudad=Madrid — todos los avisos de Madrid\n"
+    "/alta ciudad=Madrid zona=Chamberí precio_max=900\n"
+    "/alta zona=Russafa — Valencia + esa zona\n"
     "/baja — dejar de recibir avisos"
 )
 
@@ -83,10 +83,10 @@ def _responder(chat_id: int, texto: str) -> None:
 
 
 def _extraer_parametros(texto: str) -> dict:
-    """De "/alta zona=Ciutat Vella precio_max=900" saca
-    {"zona": "Ciutat Vella", "precio_max": "900"}. Admite valores con
-    espacios (nombres de zona de varias palabras)."""
-    patron = re.compile(r"(zona|precio_min|precio_max)=", re.IGNORECASE)
+    """De "/alta ciudad=Madrid zona=Chamberí precio_max=900" saca
+    {"ciudad": "Madrid", "zona": "Chamberí", "precio_max": "900"}. Admite
+    valores con espacios (nombres de ciudad/zona de varias palabras)."""
+    patron = re.compile(r"(ciudad|zona|precio_min|precio_max)=", re.IGNORECASE)
     coincidencias = list(patron.finditer(texto))
     resultado = {}
     for i, m in enumerate(coincidencias):
@@ -127,19 +127,20 @@ def procesar_mensajes_pendientes() -> None:
 
         if texto.startswith("/alta"):
             params = _extraer_parametros(texto)
+            ciudad = params.get("ciudad") or "valencia"
             zona = params.get("zona") or None
             precio_min = int(params["precio_min"]) if params.get("precio_min", "").isdigit() else None
             precio_max = int(params["precio_max"]) if params.get("precio_max", "").isdigit() else None
 
-            if upsert_filtro(chat_id, zona, precio_min, precio_max):
-                resumen = []
+            if upsert_filtro(chat_id, ciudad, zona, precio_min, precio_max):
+                resumen = [f"ciudad: {ciudad}"]
                 if zona:
                     resumen.append(f"zona: {zona}")
                 if precio_min:
                     resumen.append(f"desde {precio_min}€")
                 if precio_max:
                     resumen.append(f"hasta {precio_max}€")
-                detalle = " · ".join(resumen) if resumen else "sin filtro (todos los anuncios)"
+                detalle = " · ".join(resumen)
                 _responder(chat_id, f"✅ Alta hecha. Recibirás avisos con: {detalle}\n\nPuedes cambiarlo mandando otro /alta, o /baja para parar.")
             else:
                 _responder(chat_id, "⚠️ No he podido guardar tu alta, inténtalo en un rato.")

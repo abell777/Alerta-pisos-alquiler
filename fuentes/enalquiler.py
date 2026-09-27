@@ -2,11 +2,20 @@
 
 import re
 from bs4 import BeautifulSoup
-from .utils import localizar_linea, buscar_en_lineas
+from .utils import localizar_linea, buscar_en_lineas, slug_ciudad
 
 NOMBRE_PORTAL = "enalquiler"
 
 PATRON_ID = re.compile(r"/alquiler_piso_[^/]+/[^/]+_(\d{5,})\.html$")
+
+
+def url_ciudad(ciudad: str) -> str:
+    """Página genérica de "toda la provincia" de enalquiler.com. Confirmada
+    (probado con Valencia y Barcelona): funciona igual para cualquier
+    ciudad/provincia de España, solo cambia el slug. Es más amplia que las
+    URLs de zona concreta que usábamos antes para Valencia (esas cubrían 4
+    barrios; esta cubre toda la provincia en una sola petición)."""
+    return f"https://www.enalquiler.com/pisos-alquiler-{slug_ciudad(ciudad)}.html"
 
 
 def parsear(html: str) -> list[dict]:

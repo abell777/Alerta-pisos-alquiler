@@ -6,6 +6,18 @@ from bs4 import BeautifulSoup
 NOMBRE_PORTAL = "pisos"
 
 
+def url_ciudad(ciudad: str) -> str:
+    """OJO: solo confirmado para Valencia
+    (/alquiler/pisos-valencia_capital_zona_urbana/). El patrón
+    "<ciudad>_capital_zona_urbana" es el que usa pisos.com para capitales de
+    provincia; probablemente generaliza a Madrid, Barcelona, Sevilla, etc.,
+    pero no está verificado. Compruébalo en el navegador la primera vez que
+    añadas una ciudad nueva, igual que hicimos con Valencia.
+    """
+    from .utils import slug_ciudad
+    return f"https://www.pisos.com/alquiler/pisos-{slug_ciudad(ciudad)}_capital_zona_urbana/"
+
+
 def parsear(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     tarjetas = soup.find_all("div", class_="ad-preview")

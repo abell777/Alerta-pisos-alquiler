@@ -1,18 +1,25 @@
 """
-Scraper de anuncios de alquiler — orquestador multi-portal y multi-usuario.
+Scraper de anuncios de alquiler — orquestador multi-portal, multi-ciudad y
+multi-usuario.
 
-Cada portal tiene su propio parser en fuentes/<portal>.py, con una función
-parsear(html) que devuelve una lista de anuncios en formato común:
-{portal, id, titulo, subtitulo, url, precio, m2, habitaciones, banos}
+Cada portal tiene su propio parser en fuentes/<portal>.py, con:
+- parsear(html) -> lista de anuncios {portal, id, titulo, subtitulo, url,
+  precio, m2, habitaciones, banos}
+- url_ciudad(ciudad) -> URL de búsqueda de ese portal para esa ciudad
+
+Ya no hay una lista fija de búsquedas: cada ejecución mira qué ciudades
+tienen a alguien registrado en Supabase (más Valencia siempre, como base) y
+construye sobre la marcha las 3 URLs (una por portal) para cada una. Así el
+scraper crece solo según quién se vaya registrando, sin tener que tocar
+código para añadir una ciudad nueva.
 
 Flujo de cada ejecución:
-1. Procesa los mensajes que la gente le haya mandado al bot (/alta, /baja)
-   y actualiza sus filtros en Supabase (registro.py).
-2. Carga la lista de filtros activos (filtros.py).
-3. Para cada búsqueda configurada: descarga, parsea, y marca en Supabase
-   qué anuncios son nuevos de verdad (storage.py).
-4. Cada anuncio nuevo se compara contra el filtro de cada persona activa;
-   si encaja, se le manda por Telegram solo a ella.
+1. Procesa los mensajes que la gente le haya mandado al bot (/alta, /baja).
+2. Carga los filtros activos y calcula qué ciudades vigilar.
+3. Para cada (ciudad, portal): descarga, parsea, marca en Supabase qué
+   anuncios son nuevos de verdad.
+4. Cada anuncio nuevo se compara contra el filtro de cada persona activa
+   (ciudad, zona, precio); si encaja, se le manda por Telegram solo a ella.
 """
 
 import os
@@ -20,11 +27,11 @@ import time
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()  # antes de leer nada de os.environ
+load_dotenv()
 
 import storage
 import registro
-from filtros import cargar_filtros_activos, anuncio_coincide
+from filtros import cargar_filtros_activos, obtener_ciudades_activas, anuncio_coincide
 from notifier import enviar_telegram
 from fuentes import enalquiler, trovimap, pisos
 
@@ -37,19 +44,26 @@ HEADERS = {
 DELAY_ENTRE_PETICIONES = 3  # segundos, cortesía con el servidor
 
 # Se usa solo si todavía no hay nadie registrado en Supabase (o Supabase no
-# está configurado), para no perder el comportamiento de las primeras
-# semanas: todo se manda a tu chat personal.
+# está configurado): todo se manda a tu chat personal, como al principio.
 CHAT_ID_RESPALDO = os.environ.get("TELEGRAM_CHAT_ID")
 
-# Cada entrada: (nombre_para_ti, url, función_parsear_del_portal)
-BUSQUEDAS = [
-    ("Valencia - piso particular", "https://www.enalquiler.com/alquilar/alquiler-piso-particular-valencia_2_50692_48.html", enalquiler.parsear),
-    ("Valencia - Exposició", "https://www.enalquiler.com/alquilar/alquiler-pisos-exposicio_2_50692_48.html", enalquiler.parsear),
-    ("Valencia - Malvarrosa/Patacona", "https://www.enalquiler.com/alquilar/alquiler-pisos-malvarrosa-patacona_2_50692_48.html", enalquiler.parsear),
-    ("Valencia - Plana", "https://www.enalquiler.com/alquilar/alquiler-pisos-plana-valencia_2_50692_48.html", enalquiler.parsear),
-    ("Valencia - Trovimap", "https://www.trovimap.com/alquiler/vivienda/Valencia/Valencia", trovimap.parsear),
-    ("Valencia - Pisos.com", "https://www.pisos.com/alquiler/pisos-valencia_capital_zona_urbana/", pisos.parsear),
+# Cada entrada: (nombre_del_portal, función_url_ciudad, función_parsear)
+PORTALES = [
+    ("enalquiler", enalquiler.url_ciudad, enalquiler.parsear),
+    ("Trovimap", trovimap.url_ciudad, trovimap.parsear),
+    ("Pisos.com", pisos.url_ciudad, pisos.parsear),
 ]
+
+
+def construir_busquedas(ciudades: set) -> list:
+    """(nombre_para_ti, url, parsear, ciudad) por cada combinación
+    ciudad x portal."""
+    busquedas = []
+    for ciudad in sorted(ciudades):
+        for nombre_portal, url_ciudad_fn, parsear in PORTALES:
+            nombre = f"{ciudad.title()} - {nombre_portal}"
+            busquedas.append((nombre, url_ciudad_fn(ciudad), parsear, ciudad))
+    return busquedas
 
 
 def formatear_mensaje(anuncio: dict, nombre_busqueda: str) -> str:
@@ -73,8 +87,6 @@ def notificar_anuncio(anuncio: dict, nombre_busqueda: str, filtros_activos: list
     mensaje = formatear_mensaje(anuncio, nombre_busqueda)
 
     if not filtros_activos:
-        # Todavía nadie registrado (o Supabase sin configurar): comportamiento
-        # antiguo, todo va a tu chat fijo.
         if CHAT_ID_RESPALDO:
             enviar_telegram(mensaje, CHAT_ID_RESPALDO)
         return
@@ -84,7 +96,7 @@ def notificar_anuncio(anuncio: dict, nombre_busqueda: str, filtros_activos: list
             enviar_telegram(mensaje, filtro["chat_id"])
 
 
-def revisar_busqueda(nombre: str, url: str, parsear, filtros_activos: list[dict]) -> int:
+def revisar_busqueda(nombre: str, url: str, parsear, ciudad: str, filtros_activos: list[dict]) -> int:
     print(f"Revisando: {nombre}...")
     try:
         respuesta = requests.get(url, headers=HEADERS, timeout=15)
@@ -94,6 +106,8 @@ def revisar_busqueda(nombre: str, url: str, parsear, filtros_activos: list[dict]
         return 0
 
     anuncios = parsear(respuesta.text)
+    for a in anuncios:
+        a["ciudad"] = ciudad
     print(f"  {len(anuncios)} anuncios encontrados en la página.")
 
     claves = [f"{a['portal']}:{a['id']}" for a in anuncios]
@@ -114,13 +128,14 @@ def revisar_busqueda(nombre: str, url: str, parsear, filtros_activos: list[dict]
 def main():
     registro.procesar_mensajes_pendientes()
     filtros_activos = cargar_filtros_activos()
+    ciudades = obtener_ciudades_activas(filtros_activos)
 
     total_nuevos = 0
-    for nombre, url, parsear in BUSQUEDAS:
-        total_nuevos += revisar_busqueda(nombre, url, parsear, filtros_activos)
+    for nombre, url, parsear, ciudad in construir_busquedas(ciudades):
+        total_nuevos += revisar_busqueda(nombre, url, parsear, ciudad, filtros_activos)
         time.sleep(DELAY_ENTRE_PETICIONES)
 
-    print(f"Listo. {total_nuevos} anuncio(s) nuevo(s) en total.")
+    print(f"Listo. {total_nuevos} anuncio(s) nuevo(s) en total, en {len(ciudades)} ciudad(es).")
 
 
 if __name__ == "__main__":

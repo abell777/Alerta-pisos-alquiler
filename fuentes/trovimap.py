@@ -11,6 +11,17 @@ NOMBRE_PORTAL = "trovimap"
 PATRON_ID = re.compile(r"/inmueble/(\d+-\d+)$")
 
 
+def url_ciudad(ciudad: str) -> str:
+    """OJO: solo confirmado para Valencia (/alquiler/vivienda/Valencia/Valencia).
+    Trovimap organiza la URL como /alquiler/vivienda/<Región>/<Ciudad>; para
+    una capital de provincia suele coincidir región=ciudad, pero no está
+    verificado para otras ciudades. La primera vez que añadas una ciudad
+    nueva, comprueba en el navegador que esta URL carga anuncios de verdad
+    (y no una página vacía o de error) antes de darla por buena."""
+    c = (ciudad or "").strip().title()
+    return f"https://www.trovimap.com/alquiler/vivienda/{c}/{c}"
+
+
 def parsear(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     enlaces = soup.find_all("a", href=PATRON_ID)

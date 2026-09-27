@@ -1,6 +1,7 @@
 """Utilidades compartidas entre los distintos parsers de portales (fuentes/)."""
 
 import re
+import unicodedata
 
 
 def localizar_linea(lineas: list[str], texto: str, desde: int = 0):
@@ -19,3 +20,14 @@ def buscar_en_lineas(lineas: list[str], patron: str, grupo: int = 0):
                 return next((g for g in m.groups() if g), None)
             return m.group(0)
     return None
+
+
+def slug_ciudad(ciudad: str) -> str:
+    """"Ciutat Vella" -> "ciutat-vella", "Sant Cugat del Vallès" -> "sant-cugat-del-valles".
+    Usado para construir las URLs de búsqueda de cada portal a partir del
+    nombre de ciudad que escribe la gente en /alta ciudad=..."""
+    texto = unicodedata.normalize("NFD", ciudad or "")
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    texto = texto.lower().strip()
+    texto = re.sub(r"[^a-z0-9]+", "-", texto).strip("-")
+    return texto
