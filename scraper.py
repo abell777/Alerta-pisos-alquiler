@@ -47,6 +47,18 @@ BUSQUEDAS = [
         "Valencia - piso particular",
         "https://www.enalquiler.com/alquilar/alquiler-piso-particular-valencia_2_50692_48.html",
     ),
+    (
+        "Valencia - Exposició",
+        "https://www.enalquiler.com/alquilar/alquiler-pisos-exposicio_2_50692_48.html",
+    ),
+    (
+        "Valencia - Malvarrosa/Patacona",
+        "https://www.enalquiler.com/alquilar/alquiler-pisos-malvarrosa-patacona_2_50692_48.html",
+    ),
+    (
+        "Valencia - Plana",
+        "https://www.enalquiler.com/alquilar/alquiler-pisos-plana-valencia_2_50692_48.html",
+    ),
 ]
 
 
