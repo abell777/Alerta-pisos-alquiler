@@ -1,31 +1,67 @@
 """
 Guarda qué anuncios ya hemos visto, para no notificar dos veces el mismo.
 
-Versión actual: un archivo JSON local (vistos.json). Sencillo, funciona perfecto
-para probar el proyecto y para las primeras semanas.
+Versión Supabase: ya no usamos vistos.json local (no encajaba con tener
+usuarios y muchos más anuncios acumulados). En su lugar, cada anuncio
+encontrado se intenta insertar en la tabla "vistos" de Supabase; los que
+Postgres rechaza por ya existir (clave duplicada) son los que ya
+conocíamos, y los que acepta son los realmente nuevos. Así no hace falta
+descargar el histórico completo en cada ejecución, por muy grande que se
+haga con el tiempo.
 
-Cuando pasemos a producción de verdad (con usuarios y filtros por persona),
-sustituiremos este archivo por tablas en Supabase, pero la función de
-scraper.py que lo usa (cargar_vistos/guardar_vistos) no tendrá que cambiar
-mucho: solo lo que hay dentro de estas dos funciones.
+Necesita dos variables de entorno:
+- SUPABASE_URL: la URL de tu proyecto (https://xxxx.supabase.co)
+- SUPABASE_SERVICE_KEY: la "service_role key" (Settings -> API en Supabase).
+  Solo debe estar en GitHub Secrets / tu .env local, nunca en código
+  público: esta clave salta las políticas de seguridad de fila.
 """
 
-import json
 import os
+import requests
 
-ARCHIVO_VISTOS = os.path.join(os.path.dirname(__file__), "vistos.json")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "resolution=ignore-duplicates,return=representation",
+}
 
 
-def cargar_vistos() -> set:
-    if not os.path.exists(ARCHIVO_VISTOS):
+def marcar_nuevos(claves: list[str]) -> set:
+    """
+    Recibe las claves (formato "portal:id") de los anuncios encontrados en
+    esta pasada. Inserta en Supabase las que no existieran ya y devuelve el
+    subconjunto que la base de datos aceptó, es decir, las realmente nuevas.
+
+    Si Supabase no está configurado todavía (SUPABASE_URL/SUPABASE_SERVICE_KEY
+    vacíos), avisa por consola y trata todo como nuevo, para que el scraper
+    siga funcionando en local con el comportamiento antiguo mientras montas
+    Supabase.
+    """
+    if not claves:
         return set()
-    with open(ARCHIVO_VISTOS, "r", encoding="utf-8") as f:
-        try:
-            return set(json.load(f))
-        except json.JSONDecodeError:
-            return set()
 
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("⚠️  Falta configurar SUPABASE_URL / SUPABASE_SERVICE_KEY. "
+              "Tratando todos los anuncios de esta pasada como nuevos.")
+        return set(claves)
 
-def guardar_vistos(vistos: set) -> None:
-    with open(ARCHIVO_VISTOS, "w", encoding="utf-8") as f:
-        json.dump(sorted(vistos), f, ensure_ascii=False, indent=2)
+    payload = [{"clave": c} for c in claves]
+    try:
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/vistos",
+            headers=HEADERS,
+            params={"on_conflict": "clave"},
+            json=payload,
+            timeout=15,
+        )
+        r.raise_for_status()
+        return {fila["clave"] for fila in r.json()}
+    except requests.RequestException as e:
+        print(f"⚠️  Error consultando Supabase (tabla vistos): {e}")
+        # Ante un fallo de red/DB, no notificamos nada en esta pasada para no
+        # arriesgarnos a duplicar avisos si el error fuera intermitente.
+        return set()

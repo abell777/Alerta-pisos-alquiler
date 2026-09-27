@@ -24,6 +24,9 @@ def parsear(html: str) -> list[dict]:
         if not titulo or not href:
             continue
 
+        subtitulo_tag = tarjeta.find("p", class_="ad-preview__subtitle")
+        subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else ""
+
         precio_tag = tarjeta.find("span", class_="ad-preview__price")
         precio = None
         if precio_tag:
@@ -52,6 +55,7 @@ def parsear(html: str) -> list[dict]:
             "portal": NOMBRE_PORTAL,
             "id": anuncio_id,
             "titulo": titulo,
+            "subtitulo": subtitulo,
             "url": url_completa,
             "precio": precio,
             "m2": m2,
