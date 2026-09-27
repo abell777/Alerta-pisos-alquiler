@@ -19,7 +19,7 @@ load_dotenv()  # antes de importar notifier, que lee variables de entorno al car
 
 from storage import cargar_vistos, guardar_vistos
 from notifier import enviar_telegram
-from fuentes import enalquiler, trovimap
+from fuentes import enalquiler, trovimap, pisos
 
 HEADERS = {
     "User-Agent": (
@@ -36,6 +36,11 @@ BUSQUEDAS = [
     ("Valencia - Malvarrosa/Patacona", "https://www.enalquiler.com/alquilar/alquiler-pisos-malvarrosa-patacona_2_50692_48.html", enalquiler.parsear),
     ("Valencia - Plana", "https://www.enalquiler.com/alquilar/alquiler-pisos-plana-valencia_2_50692_48.html", enalquiler.parsear),
     ("Valencia - Trovimap", "https://www.trovimap.com/alquiler/vivienda/Valencia/Valencia", trovimap.parsear),
+    # OJO: comprobado contra la versión de VENTA de pisos.com (misma estructura de tarjetas).
+    # pisos.com sigue el patrón /alquiler/ en vez de /venta/ para la misma zona; si esta URL
+    # da error o 0 anuncios, abre https://www.pisos.com en el navegador, busca alquiler en
+    # Valencia capital y copia aquí la URL exacta que te muestre.
+    ("Valencia - Pisos.com", "https://www.pisos.com/alquiler/pisos-valencia_capital_zona_urbana/", pisos.parsear),
 ]
 
 
