@@ -1,0 +1,5 @@
+.env
+vistos.json
+__pycache__/
+*.pyc
+.venv/
