@@ -42,7 +42,7 @@ def _precio_plausible(texto: str) -> bool:
     return 200 <= int(texto.replace(".", "")) <= 20000
 
 
-def precio_desde_linea(linea: str):
+def precio_desde_linea(linea: str, permitir_sin_euro: bool = False):
     """Extrae el precio de una línea que acaba en €. Admite el caso en que el
     contador de fotos va pegado delante ("1/251.590€" = foto 1 de 25 + 1.590€).
     Como no se puede saber dónde acaba el contador, se prueban las dos
@@ -50,6 +50,9 @@ def precio_desde_linea(linea: str):
     razonable (200-20.000 €)."""
     l = (linea or "").strip()
     if not l.endswith("€"):
+        # enalquiler pone el precio como número suelto ("1.800") en su propia línea
+        if permitir_sin_euro and _precio_plausible(l):
+            return l
         return None
     cuerpo = l[:-1].strip()
 
@@ -69,7 +72,16 @@ def precio_desde_linea(linea: str):
 def buscar_precio(lineas: list[str]):
     """Como buscar_en_lineas, pero para el precio: línea más cercana primero."""
     for linea in reversed(lineas):
-        p = precio_desde_linea(linea)
+        p = precio_desde_linea(linea, permitir_sin_euro=True)
         if p:
             return p
     return None
+
+
+def buscar_m2(lineas: list[str]):
+    """Metros cuadrados. Admite "87m", "87 m2", "87m²" (línea más cercana primero)."""
+    for linea in reversed(lineas):
+        m = re.fullmatch(r"(\d+)\s*m[2²]?", linea.strip())
+        if m:
+            return m.group(1)
+    return buscar_en_lineas(lineas, r"(\d+)\s*m[2²]")

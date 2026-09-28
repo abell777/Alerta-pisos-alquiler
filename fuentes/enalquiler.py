@@ -2,7 +2,7 @@
 
 import re
 from bs4 import BeautifulSoup
-from .utils import localizar_linea, buscar_en_lineas, buscar_precio, slug_ciudad
+from .utils import localizar_linea, buscar_en_lineas, buscar_precio, buscar_m2, slug_ciudad
 
 NOMBRE_PORTAL = "enalquiler"
 
@@ -57,7 +57,7 @@ def parsear(html: str) -> list[dict]:
             ventana_antes = []
 
         precio = buscar_precio(ventana_antes)
-        m2 = buscar_en_lineas(ventana_antes, r"(\d+)\s*m[2²]")
+        m2 = buscar_m2(ventana_antes)
         habitaciones = buscar_en_lineas(ventana_antes, r"(\d+)\s*Hab")
         banos = buscar_en_lineas(ventana_antes, r"(\d+)\s*Baño")
 
