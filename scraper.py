@@ -34,6 +34,7 @@ import registro
 from filtros import cargar_filtros_activos, obtener_ciudades_activas, anuncio_coincide
 from notifier import enviar_telegram
 from fuentes import enalquiler, trovimap, pisos
+from fuentes.utils import decodificar
 
 HEADERS = {
     "User-Agent": (
@@ -106,7 +107,7 @@ def descargar_y_parsear(urls: list[str], parsear):
         except requests.RequestException as e:
             print(f"  ⚠️  {url} -> {e}")
             continue
-        anuncios = parsear(respuesta.text)
+        anuncios = parsear(decodificar(respuesta))
         if anuncios:
             return anuncios
         print(f"  ⚠️  {url} -> 0 anuncios, probando otra URL...")

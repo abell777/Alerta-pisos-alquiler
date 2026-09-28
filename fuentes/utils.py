@@ -48,7 +48,7 @@ def precio_desde_linea(linea: str, permitir_sin_euro: bool = False):
     Como no se puede saber dónde acaba el contador, se prueban las dos
     opciones (1 o 2 dígitos) y se queda la que da un precio de alquiler
     razonable (200-20.000 €)."""
-    l = (linea or "").strip()
+    l = (linea or "").strip().replace("\x80", "€")  # € mal decodificado (cp1252)
     if not l.endswith("€"):
         # enalquiler pone el precio como número suelto ("1.800") en su propia línea
         if permitir_sin_euro:
@@ -94,3 +94,15 @@ def buscar_m2(lineas: list[str]):
         if m:
             return m.group(1)
     return buscar_en_lineas(lineas, r"(\d+)\s*m[2²]")
+
+
+def decodificar(respuesta) -> str:
+    """Texto de una respuesta HTTP con la codificación bien puesta.
+    Algunos portales (enalquiler) no declaran bien el charset y requests
+    acaba leyéndolo como latin-1, con lo que el € sale como '\\x80'. Se
+    prueba UTF-8 estricto y, si no cuadra, cp1252."""
+    contenido = respuesta.content
+    try:
+        return contenido.decode("utf-8")
+    except UnicodeDecodeError:
+        return contenido.decode("cp1252", errors="replace")

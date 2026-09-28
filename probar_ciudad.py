@@ -12,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from fuentes import enalquiler, trovimap, pisos
-from fuentes.utils import localizar_linea
+from fuentes.utils import localizar_linea, decodificar
 
 HEADERS = {
     "User-Agent": (
@@ -57,7 +57,8 @@ def probar(ciudad: str) -> None:
                 print(f"❌ {nombre}: HTTP {r.status_code}  ->  {url}")
                 continue
 
-            anuncios = parsear(r.text)
+            texto = decodificar(r)
+            anuncios = parsear(texto)
             if r.url.rstrip("/") != url.rstrip("/"):
                 print(f"     (redirigido a: {r.url})")
             if nombre == "Trovimap" and len(anuncios) < 10:
@@ -76,7 +77,7 @@ def probar(ciudad: str) -> None:
             print(f"✅ {nombre}: {len(anuncios)} anuncios ({con_precio} con precio)  ->  {url}")
             print(f"     ejemplo: {anuncios[0]['titulo']} | precio: {anuncios[0].get('precio')}")
             if con_precio == 0:
-                volcar_contexto(r.text, anuncios[0]["titulo"])
+                volcar_contexto(texto, anuncios[0]["titulo"])
             funciono = True
             break
 
