@@ -51,8 +51,17 @@ def precio_desde_linea(linea: str, permitir_sin_euro: bool = False):
     l = (linea or "").strip()
     if not l.endswith("€"):
         # enalquiler pone el precio como número suelto ("1.800") en su propia línea
-        if permitir_sin_euro and _precio_plausible(l):
-            return l
+        if permitir_sin_euro:
+            if _precio_plausible(l):
+                return l
+            # tolera caracteres invisibles / espacios raros (nbsp, ancho cero...)
+            # siempre que la línea sea SOLO dígitos, puntos y espacios
+            if re.fullmatch(r"[\d.\s\u200b\u202f\xa0]+", l):
+                limpio = re.sub(r"[^\d.]", "", l)
+                if limpio and _precio_plausible(limpio):
+                    return limpio
+                if limpio.isdigit() and 200 <= int(limpio) <= 20000:
+                    return limpio
         return None
     cuerpo = l[:-1].strip()
 

@@ -39,7 +39,7 @@ def volcar_contexto(html: str, titulo: str) -> None:
         return
     print("     --- 14 líneas antes del título ---")
     for l in lineas[max(0, idx - 14):idx + 1]:
-        print(f"     | {l[:110]}")
+        print(f"     | {l[:110]!r}")
     print("     ----------------------------------")
 
 
@@ -87,7 +87,13 @@ def probar(ciudad: str) -> None:
 def comprobar_version() -> None:
     import fuentes.utils as u
     ok = hasattr(u, "buscar_m2") and hasattr(u, "buscar_precio")
+    import inspect
     print(f"Usando fuentes desde: {u.__file__}")
+    if "buscar_precio" not in inspect.getsource(enalquiler):
+        print("⚠️  fuentes/enalquiler.py es la versión VIEJA (no usa buscar_precio). "
+              "Copia el enalquiler.py del zip nuevo en esa misma carpeta.")
+    else:
+        print("✔ enalquiler.py actualizado.")
     if not ok:
         print("⚠️  ESA carpeta tiene el utils.py VIEJO (sin el arreglo de precio). "
               "Copia ahí fuentes/utils.py y fuentes/enalquiler.py del zip nuevo.")
