@@ -47,11 +47,11 @@ DELAY_ENTRE_PETICIONES = 3  # segundos, cortesía con el servidor
 # está configurado): todo se manda a tu chat personal, como al principio.
 CHAT_ID_RESPALDO = os.environ.get("TELEGRAM_CHAT_ID")
 
-# Cada entrada: (nombre_del_portal, función_url_ciudad, función_parsear)
+# Cada entrada: (nombre_del_portal, función_urls_ciudad, función_parsear)
 PORTALES = [
-    ("enalquiler", enalquiler.url_ciudad, enalquiler.parsear),
-    ("Trovimap", trovimap.url_ciudad, trovimap.parsear),
-    ("Pisos.com", pisos.url_ciudad, pisos.parsear),
+    ("enalquiler", enalquiler.urls_ciudad, enalquiler.parsear),
+    ("Trovimap", trovimap.urls_ciudad, trovimap.parsear),
+    ("Pisos.com", pisos.urls_ciudad, pisos.parsear),
 ]
 
 
@@ -60,9 +60,9 @@ def construir_busquedas(ciudades: set) -> list:
     ciudad x portal."""
     busquedas = []
     for ciudad in sorted(ciudades):
-        for nombre_portal, url_ciudad_fn, parsear in PORTALES:
+        for nombre_portal, urls_fn, parsear in PORTALES:
             nombre = f"{ciudad.title()} - {nombre_portal}"
-            busquedas.append((nombre, url_ciudad_fn(ciudad), parsear, ciudad))
+            busquedas.append((nombre, urls_fn(ciudad), parsear, ciudad))
     return busquedas
 
 
@@ -96,16 +96,26 @@ def notificar_anuncio(anuncio: dict, nombre_busqueda: str, filtros_activos: list
             enviar_telegram(mensaje, filtro["chat_id"])
 
 
-def revisar_busqueda(nombre: str, url: str, parsear, ciudad: str, filtros_activos: list[dict]) -> int:
-    print(f"Revisando: {nombre}...")
-    try:
-        respuesta = requests.get(url, headers=HEADERS, timeout=15)
-        respuesta.raise_for_status()
-    except requests.RequestException as e:
-        print(f"  ⚠️  Error descargando la página: {e}")
-        return 0
+def descargar_y_parsear(urls: list[str], parsear):
+    """Prueba cada URL candidata y devuelve los anuncios de la primera que
+    responda bien y traiga resultados."""
+    for url in urls:
+        try:
+            respuesta = requests.get(url, headers=HEADERS, timeout=15)
+            respuesta.raise_for_status()
+        except requests.RequestException as e:
+            print(f"  ⚠️  {url} -> {e}")
+            continue
+        anuncios = parsear(respuesta.text)
+        if anuncios:
+            return anuncios
+        print(f"  ⚠️  {url} -> 0 anuncios, probando otra URL...")
+    return []
 
-    anuncios = parsear(respuesta.text)
+
+def revisar_busqueda(nombre: str, urls: list[str], parsear, ciudad: str, filtros_activos: list[dict]) -> int:
+    print(f"Revisando: {nombre}...")
+    anuncios = descargar_y_parsear(urls, parsear)
     for a in anuncios:
         a["ciudad"] = ciudad
     print(f"  {len(anuncios)} anuncios encontrados en la página.")
@@ -131,8 +141,8 @@ def main():
     ciudades = obtener_ciudades_activas(filtros_activos)
 
     total_nuevos = 0
-    for nombre, url, parsear, ciudad in construir_busquedas(ciudades):
-        total_nuevos += revisar_busqueda(nombre, url, parsear, ciudad, filtros_activos)
+    for nombre, urls, parsear, ciudad in construir_busquedas(ciudades):
+        total_nuevos += revisar_busqueda(nombre, urls, parsear, ciudad, filtros_activos)
         time.sleep(DELAY_ENTRE_PETICIONES)
 
     print(f"Listo. {total_nuevos} anuncio(s) nuevo(s) en total, en {len(ciudades)} ciudad(es).")

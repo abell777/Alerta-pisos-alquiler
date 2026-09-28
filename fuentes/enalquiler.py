@@ -2,7 +2,7 @@
 
 import re
 from bs4 import BeautifulSoup
-from .utils import localizar_linea, buscar_en_lineas, slug_ciudad
+from .utils import localizar_linea, buscar_en_lineas, buscar_precio, slug_ciudad
 
 NOMBRE_PORTAL = "enalquiler"
 
@@ -16,6 +16,10 @@ def url_ciudad(ciudad: str) -> str:
     URLs de zona concreta que usábamos antes para Valencia (esas cubrían 4
     barrios; esta cubre toda la provincia en una sola petición)."""
     return f"https://www.enalquiler.com/pisos-alquiler-{slug_ciudad(ciudad)}.html"
+
+
+def urls_ciudad(ciudad: str) -> list[str]:
+    return [url_ciudad(ciudad)]
 
 
 def parsear(html: str) -> list[dict]:
@@ -52,7 +56,7 @@ def parsear(html: str) -> list[dict]:
         else:
             ventana_antes = []
 
-        precio = buscar_en_lineas(ventana_antes, r"^([\d.,]+)\s*€$")
+        precio = buscar_precio(ventana_antes)
         m2 = buscar_en_lineas(ventana_antes, r"(\d+)\s*m[2²]")
         habitaciones = buscar_en_lineas(ventana_antes, r"(\d+)\s*Hab")
         banos = buscar_en_lineas(ventana_antes, r"(\d+)\s*Baño")

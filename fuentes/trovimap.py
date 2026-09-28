@@ -22,6 +22,10 @@ def url_ciudad(ciudad: str) -> str:
     return f"https://www.trovimap.com/alquiler/vivienda/{c}/{c}"
 
 
+def urls_ciudad(ciudad: str) -> list[str]:
+    return [url_ciudad(ciudad)]
+
+
 def parsear(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     enlaces = soup.find_all("a", href=PATRON_ID)

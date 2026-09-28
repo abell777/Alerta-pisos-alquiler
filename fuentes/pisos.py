@@ -18,6 +18,21 @@ def url_ciudad(ciudad: str) -> str:
     return f"https://www.pisos.com/alquiler/pisos-{slug_ciudad(ciudad)}_capital_zona_urbana/"
 
 
+def urls_ciudad(ciudad: str) -> list[str]:
+    """Varias URLs candidatas, de más a menos precisa. El scraper usa la
+    primera que responda bien y traiga anuncios. Confirmado: Valencia y
+    Madrid funcionan con "_capital_zona_urbana"; Barcelona da 404 con ese
+    patrón, así que se prueban variantes."""
+    from .utils import slug_ciudad
+    s = slug_ciudad(ciudad)
+    base = "https://www.pisos.com/alquiler/pisos-"
+    return [
+        f"{base}{s}_capital_zona_urbana/",
+        f"{base}{s}_capital/",
+        f"{base}{s}/",
+    ]
+
+
 def parsear(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     tarjetas = soup.find_all("div", class_="ad-preview")

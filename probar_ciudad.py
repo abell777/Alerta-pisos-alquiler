@@ -9,8 +9,10 @@ Uso (desde la carpeta del proyecto):
 
 import sys
 import requests
+from bs4 import BeautifulSoup
 
 from fuentes import enalquiler, trovimap, pisos
+from fuentes.utils import localizar_linea
 
 HEADERS = {
     "User-Agent": (
@@ -20,33 +22,56 @@ HEADERS = {
 }
 
 PORTALES = [
-    ("enalquiler", enalquiler.url_ciudad, enalquiler.parsear),
-    ("Trovimap", trovimap.url_ciudad, trovimap.parsear),
-    ("Pisos.com", pisos.url_ciudad, pisos.parsear),
+    ("enalquiler", enalquiler.urls_ciudad, enalquiler.parsear),
+    ("Trovimap", trovimap.urls_ciudad, trovimap.parsear),
+    ("Pisos.com", pisos.urls_ciudad, pisos.parsear),
 ]
+
+
+def volcar_contexto(html: str, titulo: str) -> None:
+    """Enseña las líneas de texto justo antes del título de un anuncio, para
+    ver por qué no se ha podido leer el precio."""
+    soup = BeautifulSoup(html, "html.parser")
+    lineas = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
+    idx = localizar_linea(lineas, titulo)
+    if idx is None:
+        print("     (no encuentro el título en el texto para mostrar contexto)")
+        return
+    print("     --- 14 líneas antes del título ---")
+    for l in lineas[max(0, idx - 14):idx + 1]:
+        print(f"     | {l[:110]}")
+    print("     ----------------------------------")
 
 
 def probar(ciudad: str) -> None:
     print(f"\n=== {ciudad} ===")
-    for nombre, url_fn, parsear in PORTALES:
-        url = url_fn(ciudad)
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=15)
+    for nombre, urls_fn, parsear in PORTALES:
+        funciono = False
+        for url in urls_fn(ciudad):
+            try:
+                r = requests.get(url, headers=HEADERS, timeout=15)
+            except requests.RequestException as e:
+                print(f"❌ {nombre}: error de red ({e})  ->  {url}")
+                continue
             if r.status_code != 200:
                 print(f"❌ {nombre}: HTTP {r.status_code}  ->  {url}")
                 continue
+
             anuncios = parsear(r.text)
-        except requests.RequestException as e:
-            print(f"❌ {nombre}: error de red ({e})  ->  {url}")
-            continue
+            if not anuncios:
+                print(f"⚠️  {nombre}: la página carga pero 0 anuncios  ->  {url}")
+                continue
 
-        if not anuncios:
-            print(f"⚠️  {nombre}: la página carga pero 0 anuncios (URL o parser a revisar)  ->  {url}")
-            continue
+            con_precio = sum(1 for a in anuncios if a.get("precio"))
+            print(f"✅ {nombre}: {len(anuncios)} anuncios ({con_precio} con precio)  ->  {url}")
+            print(f"     ejemplo: {anuncios[0]['titulo']} | precio: {anuncios[0].get('precio')}")
+            if con_precio == 0:
+                volcar_contexto(r.text, anuncios[0]["titulo"])
+            funciono = True
+            break
 
-        con_precio = sum(1 for a in anuncios if a.get("precio"))
-        print(f"✅ {nombre}: {len(anuncios)} anuncios ({con_precio} con precio)  ->  {url}")
-        print(f"     ejemplo: {anuncios[0]['titulo']}")
+        if not funciono:
+            print(f"   >>> {nombre}: ninguna URL funcionó para {ciudad}")
 
 
 if __name__ == "__main__":
