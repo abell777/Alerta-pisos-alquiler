@@ -84,7 +84,19 @@ def probar(ciudad: str) -> None:
             print(f"   >>> {nombre}: ninguna URL funcionó para {ciudad}")
 
 
+def comprobar_version() -> None:
+    import fuentes.utils as u
+    ok = hasattr(u, "buscar_m2") and hasattr(u, "buscar_precio")
+    print(f"Usando fuentes desde: {u.__file__}")
+    if not ok:
+        print("⚠️  ESA carpeta tiene el utils.py VIEJO (sin el arreglo de precio). "
+              "Copia ahí fuentes/utils.py y fuentes/enalquiler.py del zip nuevo.")
+    else:
+        print("✔ utils.py con el arreglo de precio.")
+
+
 if __name__ == "__main__":
+    comprobar_version()
     ciudades = sys.argv[1:] or ["Madrid", "Barcelona"]
     for c in ciudades:
         probar(c)

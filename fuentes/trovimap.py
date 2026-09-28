@@ -22,8 +22,18 @@ def url_ciudad(ciudad: str) -> str:
     return f"https://www.trovimap.com/alquiler/vivienda/{c}/{c}"
 
 
+# URLs que hay que fijar a mano cuando el patrón automático no da la ciudad
+# completa. Abre trovimap.com, busca alquiler en esa ciudad y pega aquí la URL
+# de la barra del navegador. Ejemplo:
+#   "barcelona": "https://www.trovimap.com/alquiler/vivienda/....",
+URLS_MANUALES = {
+}
+
+
 def urls_ciudad(ciudad: str) -> list[str]:
-    return [url_ciudad(ciudad)]
+    from .utils import slug_ciudad
+    manual = URLS_MANUALES.get(slug_ciudad(ciudad))
+    return [manual] if manual else [url_ciudad(ciudad)]
 
 
 def parsear(html: str) -> list[dict]:
