@@ -64,6 +64,10 @@ def probar(ciudad: str) -> None:
                 crudos = r.text.count("/inmueble/")
                 print(f"     [diagnóstico Trovimap] enlaces '/inmueble/' en el HTML: {crudos}, "
                       f"tamaño de la página: {len(r.text)} caracteres")
+                import re as _re
+                sopa = BeautifulSoup(r.text, "html.parser")
+                for a in sopa.find_all("a", href=_re.compile(r"/inmueble/")):
+                    print(f"       enlace: ...{a['href'][-22:]} | texto: {a.get_text(strip=True)[:50]!r}")
             if not anuncios:
                 print(f"⚠️  {nombre}: la página carga pero 0 anuncios  ->  {url}")
                 continue
