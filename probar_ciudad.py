@@ -58,6 +58,12 @@ def probar(ciudad: str) -> None:
                 continue
 
             anuncios = parsear(r.text)
+            if r.url.rstrip("/") != url.rstrip("/"):
+                print(f"     (redirigido a: {r.url})")
+            if nombre == "Trovimap" and len(anuncios) < 10:
+                crudos = r.text.count("/inmueble/")
+                print(f"     [diagnóstico Trovimap] enlaces '/inmueble/' en el HTML: {crudos}, "
+                      f"tamaño de la página: {len(r.text)} caracteres")
             if not anuncios:
                 print(f"⚠️  {nombre}: la página carga pero 0 anuncios  ->  {url}")
                 continue
