@@ -189,7 +189,30 @@ def borrar_datos(chat_id: int) -> bool:
             timeout=15,
         )
         r.raise_for_status()
+        requests.delete(  # y sus avisos pendientes en cola
+            f"{SUPABASE_URL}/rest/v1/cola_retardo",
+            headers=HEADERS, params={"chat_id": f"eq.{chat_id}"}, timeout=15,
+        )
         return True
     except requests.RequestException as e:
         print(f"⚠️  Error borrando datos de {chat_id}: {e}")
+        return False
+
+
+def set_plan(chat_id: int, plan: str) -> bool:
+    """plan = 'gratis' | 'premium'."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return False
+    try:
+        r = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/usuarios_filtros",
+            headers={**HEADERS, "Prefer": "return=representation"},
+            params={"chat_id": f"eq.{chat_id}"},
+            json={"plan": plan},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return bool(r.json())  # False si esa persona no existe
+    except requests.RequestException as e:
+        print(f"⚠️  Error cambiando plan de {chat_id}: {e}")
         return False

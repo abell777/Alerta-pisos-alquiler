@@ -24,6 +24,8 @@ import re
 import requests
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+ADMIN_ID = str(os.environ.get("TELEGRAM_CHAT_ID", ""))
+PAYMENT_LINK = os.environ.get("PAYMENT_LINK", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
@@ -41,6 +43,7 @@ AYUDA = (
     "  · habs: habitaciones mínimas · m2: metros mínimos\n"
     "/estado — ver tu filtro actual\n"
     "/baja — pausar avisos\n"
+    "/premium — recibir los avisos al instante\n"
     "/borrar — eliminar todos mis datos\n"
     "/privacidad — qué datos guardo"
 )
@@ -112,7 +115,7 @@ def procesar_mensajes_pendientes() -> None:
     if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
         return  # todavía no está todo configurado; el scraper sigue funcionando igual
 
-    from filtros import upsert_filtro, desactivar_filtro, obtener_filtro, borrar_datos
+    from filtros import upsert_filtro, desactivar_filtro, obtener_filtro, borrar_datos, set_plan
 
     offset = _leer_offset()
     try:
@@ -180,8 +183,37 @@ def procesar_mensajes_pendientes() -> None:
                 if f.get("precio_max"): partes.append(f"hasta {f['precio_max']}€")
                 if f.get("habs_min"): partes.append(f"{f['habs_min']}+ hab")
                 if f.get("m2_min"): partes.append(f"{f['m2_min']}+ m²")
+                plan = "⭐ premium" if f.get("plan") == "premium" else "gratis"
                 estado = "✅ activo" if f.get("activo") else "⏸️ en pausa (/alta para reactivar)"
-                _responder(chat_id, f"Tu filtro: {' · '.join(partes)}\nEstado: {estado}")
+                _responder(chat_id, f"Tu filtro: {' · '.join(partes)}\nEstado: {estado}\nPlan: {plan}")
+
+        elif texto.startswith("/premium_on") or texto.startswith("/premium_off"):
+            # solo el administrador: /premium_on 123456789
+            if str(chat_id) != ADMIN_ID:
+                continue
+            partes = texto.split()
+            if len(partes) < 2 or not partes[1].lstrip("-").isdigit():
+                _responder(chat_id, "Uso: /premium_on <chat_id>  o  /premium_off <chat_id>")
+                continue
+            objetivo = int(partes[1])
+            activar = texto.startswith("/premium_on")
+            if set_plan(objetivo, "premium" if activar else "gratis"):
+                _responder(chat_id, f"✅ {objetivo} ahora es {'premium' if activar else 'gratis'}.")
+                if activar:
+                    _responder(objetivo, "⭐ Premium activado: a partir de ahora recibes los avisos al instante.")
+            else:
+                _responder(chat_id, "⚠️ No encontrado (¿ha hecho /alta?) o error.")
+
+        elif texto.startswith("/premium"):
+            f = obtener_filtro(chat_id)
+            if f and f.get("plan") == "premium":
+                _responder(chat_id, "⭐ Ya eres premium: recibes los avisos al instante.")
+            else:
+                cobro = f"Suscríbete aquí: {PAYMENT_LINK}\n\nDespués de pagar, tu plan se activa en poco tiempo." if PAYMENT_LINK else "Escríbeme por aquí y te lo activo."
+                _responder(chat_id, "⭐ Plan Premium: avisos al instante, sin esperas. "
+                                    "Con el plan gratis los recibes con unos minutos de retraso, "
+                                    "y en pisos el que llama primero suele quedárselo.\n\n" + cobro +
+                                    f"\n\nTu ID: {chat_id}")
 
         elif texto.startswith("/borrar"):
             ok = borrar_datos(chat_id)

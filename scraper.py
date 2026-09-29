@@ -31,6 +31,7 @@ load_dotenv()
 
 import storage
 import registro
+import cola
 from filtros import cargar_filtros_activos, obtener_ciudades_activas, anuncio_coincide
 from notifier import enviar_telegram
 from fuentes import enalquiler, trovimap, pisos
@@ -94,7 +95,10 @@ def notificar_anuncio(anuncio: dict, nombre_busqueda: str, filtros_activos: list
 
     for filtro in filtros_activos:
         if anuncio_coincide(anuncio, nombre_busqueda, filtro):
-            enviar_telegram(mensaje, filtro["chat_id"])
+            if filtro.get("plan") == "premium":
+                enviar_telegram(mensaje, filtro["chat_id"])  # al instante
+            else:
+                cola.encolar(filtro["chat_id"], mensaje)  # plan gratis: con retraso
 
 
 def descargar_y_parsear(urls: list[str], parsear):
@@ -138,6 +142,7 @@ def revisar_busqueda(nombre: str, urls: list[str], parsear, ciudad: str, filtros
 
 def main():
     registro.procesar_mensajes_pendientes()
+    cola.enviar_vencidos()
     filtros_activos = cargar_filtros_activos()
     ciudades = obtener_ciudades_activas(filtros_activos)
 
