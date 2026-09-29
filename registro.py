@@ -9,7 +9,9 @@ Comandos que entiende:
   /alta ciudad=Madrid zona=Chamberí precio_max=900
   /alta zona=Russafa              -> Valencia (por defecto) + esa zona
   /baja                           -> dejar de recibir avisos
-  /estado                         -> recordatorio de los comandos
+  /alta ... habs=2 m2=60          -> habitaciones y m² mínimos
+  /estado                         -> ver tu filtro actual
+  /borrar /privacidad             -> RGPD
 
 Se llama una vez al principio de cada ejecución del scraper (cada 5 min),
 leyendo solo los mensajes nuevos desde el último que se procesó (el
@@ -32,14 +34,23 @@ HEADERS_SB = {
 }
 
 AYUDA = (
-    "Comandos disponibles:\n"
+    "🏠 Alertas de pisos en alquiler, al instante.\n\n"
     "/alta — Valencia, todos los avisos\n"
-    "/alta ciudad=Madrid — todos los avisos de Madrid\n"
-    "/alta ciudad=Madrid zona=Chamberí precio_max=900\n"
-    "/alta zona=Russafa — Valencia + esa zona\n"
-    "/baja — dejar de recibir avisos"
+    "/alta ciudad=Madrid zona=Chamberí precio_max=900 habs=2 m2=60\n"
+    "  · zona: admite varias separadas por coma (zona=Russafa,Ruzafa)\n"
+    "  · habs: habitaciones mínimas · m2: metros mínimos\n"
+    "/estado — ver tu filtro actual\n"
+    "/baja — pausar avisos\n"
+    "/borrar — eliminar todos mis datos\n"
+    "/privacidad — qué datos guardo"
 )
 
+PRIVACIDAD = (
+    "🔒 Privacidad: solo guardo tu identificador de Telegram y el filtro que "
+    "configuras (ciudad, zona, precio, habitaciones, m²). Lo uso únicamente para "
+    "enviarte avisos de pisos; no lo vendo ni lo comparto. "
+    "Con /borrar lo elimino por completo cuando quieras."
+)
 
 def _leer_offset() -> int:
     try:
@@ -86,7 +97,7 @@ def _extraer_parametros(texto: str) -> dict:
     """De "/alta ciudad=Madrid zona=Chamberí precio_max=900" saca
     {"ciudad": "Madrid", "zona": "Chamberí", "precio_max": "900"}. Admite
     valores con espacios (nombres de ciudad/zona de varias palabras)."""
-    patron = re.compile(r"(ciudad|zona|precio_min|precio_max)=", re.IGNORECASE)
+    patron = re.compile(r"(ciudad|zona|precio_min|precio_max|habs|m2)=", re.IGNORECASE)
     coincidencias = list(patron.finditer(texto))
     resultado = {}
     for i, m in enumerate(coincidencias):
@@ -101,7 +112,7 @@ def procesar_mensajes_pendientes() -> None:
     if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
         return  # todavía no está todo configurado; el scraper sigue funcionando igual
 
-    from filtros import upsert_filtro, desactivar_filtro
+    from filtros import upsert_filtro, desactivar_filtro, obtener_filtro, borrar_datos
 
     offset = _leer_offset()
     try:
@@ -132,7 +143,10 @@ def procesar_mensajes_pendientes() -> None:
             precio_min = int(params["precio_min"]) if params.get("precio_min", "").isdigit() else None
             precio_max = int(params["precio_max"]) if params.get("precio_max", "").isdigit() else None
 
-            if upsert_filtro(chat_id, ciudad, zona, precio_min, precio_max):
+            habs_min = int(params["habs"]) if params.get("habs", "").isdigit() else None
+            m2_min = int(params["m2"]) if params.get("m2", "").isdigit() else None
+
+            if upsert_filtro(chat_id, ciudad, zona, precio_min, precio_max, habs_min, m2_min):
                 resumen = [f"ciudad: {ciudad}"]
                 if zona:
                     resumen.append(f"zona: {zona}")
@@ -140,6 +154,10 @@ def procesar_mensajes_pendientes() -> None:
                     resumen.append(f"desde {precio_min}€")
                 if precio_max:
                     resumen.append(f"hasta {precio_max}€")
+                if habs_min:
+                    resumen.append(f"{habs_min}+ hab")
+                if m2_min:
+                    resumen.append(f"{m2_min}+ m²")
                 detalle = " · ".join(resumen)
                 _responder(chat_id, f"✅ Alta hecha. Recibirás avisos con: {detalle}\n\nPuedes cambiarlo mandando otro /alta, o /baja para parar.")
             else:
@@ -151,7 +169,31 @@ def procesar_mensajes_pendientes() -> None:
             else:
                 _responder(chat_id, "⚠️ No he podido procesar tu baja, inténtalo en un rato.")
 
-        else:  # /start, /estado, o cualquier otra cosa
+        elif texto.startswith("/estado"):
+            f = obtener_filtro(chat_id)
+            if not f:
+                _responder(chat_id, "No tienes ningún filtro. Crea uno con /alta")
+            else:
+                partes = [f"ciudad: {f.get('ciudad')}"]
+                if f.get("zona"): partes.append(f"zona: {f['zona']}")
+                if f.get("precio_min"): partes.append(f"desde {f['precio_min']}€")
+                if f.get("precio_max"): partes.append(f"hasta {f['precio_max']}€")
+                if f.get("habs_min"): partes.append(f"{f['habs_min']}+ hab")
+                if f.get("m2_min"): partes.append(f"{f['m2_min']}+ m²")
+                estado = "✅ activo" if f.get("activo") else "⏸️ en pausa (/alta para reactivar)"
+                _responder(chat_id, f"Tu filtro: {' · '.join(partes)}\nEstado: {estado}")
+
+        elif texto.startswith("/borrar"):
+            ok = borrar_datos(chat_id)
+            _responder(chat_id, "🗑️ Todos tus datos han sido eliminados." if ok else "⚠️ No he podido borrar tus datos, inténtalo en un rato.")
+
+        elif texto.startswith("/privacidad"):
+            _responder(chat_id, PRIVACIDAD)
+
+        elif texto.startswith("/start"):
+            _responder(chat_id, AYUDA + "\n\n" + PRIVACIDAD)
+
+        else:
             _responder(chat_id, AYUDA)
 
     if ultimo_id > offset:
